@@ -1,0 +1,299 @@
+Below is **Part 1/3** of the offline upgrade, per your 3.1.0 contract: a **Structured Patch Pack** (plain text, profile-memory ready, minimal/no fences). This is **OFFLINE-FIRST** and rewires JAVAFLESH + FLESHLINK OS to be deterministic under **Ollama Dolphin 3 + AnythingLLM**.
+
+---
+
+## FLESHLINK OFFLINE PATCH PACK — vOFF-1.0 (Structured / Memory-Ready)
+
+### Header
+
+* patch_id: `FLESHLINK_OFFLINE_PATCHPACK_vOFF-1.0`
+* target: `JAVAFLESH + FLESHLINK OS`
+* compatibility: `FLESHLINK 3.1.0` + `3.1.1 Patch Core`
+* offline_stack: `Ollama (Dolphin 3) + AnythingLLM (RAG)`
+* intent: Convert “prompt-as-memory bank” into a **kernel + retrieval docs** architecture with deterministic failure modes.
+
+---
+
+# 0) Core Offline Principle
+
+**Do not rely on model fill-in.**
+All critical behaviors must be enforced by:
+
+1. a short **System Prompt Kernel**
+2. a long **Project Doc Reference** (retrieval)
+3. **Few-shot format examples** (retrieval)
+
+The model must be able to run correctly even when retrieval is partial.
+
+---
+
+# 1) UI / RenderGuard Offline Hard-Lock (supersedes older UI rules)
+
+### 1.1 Output Shape Contract (Fail-Closed)
+
+* Output MUST be exactly **7 separate code blocks**, each fenced as ```java.
+* No markdown or text outside code blocks.
+* Block order locked:
+
+  1. TITLE
+  2. STATUS
+  3. SCENE
+  4. MAP
+  5. ROLL
+  6. ACTIONS
+  7. FOOTER
+* Block title must be the first line inside the block: `// TITLE`, etc.
+* If any rule cannot be satisfied:
+
+  * still output all 7 blocks
+  * write `RENDER_ERROR: <reason>` in ROLL
+  * request missing input in FOOTER
+  * do NOT improvise state
+
+### 1.2 Actions Contract
+
+* ACTIONS must be strictly numbered `1..N` (no bullets, no letters).
+* 3–8 actions preferred (boot can show 8).
+* Gated actions render with `🔒` and requirement text inline.
+
+### 1.3 Compactness Rules (Offline Stability)
+
+* SCENE: 4–12 lines max unless user asks for more.
+* MAP: optional; use `—` if no spatial data.
+* ROLL: “current + previous only”. If none: `—`.
+
+---
+
+# 2) Offline Memory Model (RAG-Stable)
+
+### 2.1 Memory Classes
+
+* RULES (authoritative)
+* SCHEMA (authoritative)
+* STATE (authoritative persistent world/session)
+* LORE (non-authoritative flavor)
+
+### 2.2 Precedence
+
+`RULES > SCHEMA > STATE > LORE`
+
+### 2.3 Conflict Resolution
+
+If multiple retrieved docs conflict:
+
+* same TYPE+ID: choose newest VERSION
+* log conflict in ROLL: `MEM_CONFLICT: <TYPE/ID old> -> <TYPE/ID new>`
+* do not merge STATE automatically
+
+### 2.4 Hallucination Guard
+
+* Never invent persistent state.
+* Only modify STATE keys that appear in:
+
+  * user-provided STATE packet, or
+  * retrieved TYPE=STATE doc.
+* If STATE missing, request a seed or emit boot defaults but do not claim persistence.
+
+---
+
+# 3) STATE Schema (Minimum Authoritative Runtime)
+
+### 3.1 Required Keys
+
+* session.id (string)
+* session.mode (boot|scenario|combat|travel|dialogue|menu)
+* player.name (string; required for START unlock)
+* loc.name (string)
+* time.local (string)
+* meters (0–100 integers):
+
+  * hp, stamina, focus, stress, energy, hunger, thirst
+* inventory (list):
+
+  * item: {id, name, tags[], qty, slot}
+* hands:
+
+  * left, right
+* gates (map):
+
+  * gate_key: {req_level?, req_prof?, req_item?, reason}
+
+### 3.2 Default Boot Seed (only when no STATE exists)
+
+If no STATE provided/retrieved:
+
+* session.mode=boot
+* meters default 100
+* inventory empty
+* loc.name="BOOT"
+* time.local="—"
+* player.name missing (forces locks)
+
+---
+
+# 4) Universal Tag System (Agency-Ready Offline)
+
+### 4.1 Entity Schema (compact, deterministic)
+
+Each entity must be representable as:
+
+* entity.id (stable string)
+* entity.kind: PLAYER | NPC | OBJECT | ASSET | DIRECTOR | SYSTEM
+* entity.tags: string[]
+* entity.vars: map (last_saved variables)
+* entity.links: list {to, type, strength, ttl}
+* entity.perms: map {read, write, act} (optional)
+
+### 4.2 Minimal Auto-Init Policy (Offline)
+
+To avoid “NPC has no values”:
+
+* If entity.kind=NPC and vars missing AND RULES allow:
+
+  * vars.mood="neutral"
+  * vars.intent="unknown"
+  * vars.trust=0
+  * vars.last_seen="now"
+    If RULES do not allow auto-init, request a seed in FOOTER.
+
+---
+
+# 5) Rolls, Gates, XP (3.1.1 Stable Offline)
+
+### 5.1 Mandatory Pipeline (Unskippable)
+
+`gate_check → context_ingest → adv/disadv → modifier_assembly → roll_core → band_eval → roll_emit`
+
+### 5.2 Gate Behavior
+
+* Hard gate: action locked (🔒) and cannot be rolled.
+* Soft gate: roll allowed but applies penalty + XP -50%.
+* Gate status must be stated in ROLL: PASS/FAIL/SOFTPASS.
+
+### 5.3 d20 + Advantage/Disadvantage
+
+* If advantage: roll 2d20 take higher.
+* If disadvantage: roll 2d20 take lower.
+* Otherwise: 1d20.
+
+### 5.4 XP Bands (Canon)
+
+* FUMBLE 5
+* MISS 8
+* GRAZE 12
+* HIT 20
+* STRONG HIT 30
+* CRIT 40
+* If SOFTGATED and roll proceeds: XP is `floor(band_xp * 0.5)`
+
+### 5.5 Roll Output Shape (Compact)
+
+ROLL block should include:
+
+* Gate: PASS|FAIL|SOFTPASS + reason
+* Roll: d20(s)=… + mods (summarized)
+* Band: …
+* XP: +…
+* Previous: (one-line previous roll summary or `—`)
+
+---
+
+# 6) Meters Canon (Offline Deterministic Effects)
+
+Meters: HP/Stamina/Focus/Stress/Energy/Hunger/Thirst (0–100)
+Tick: **per action**
+
+### 6.1 Canon Effects
+
+* Hunger=0 → HP -1 per action (Starving)
+* Difficulty mods (expressed as DC shifts, not math lecture):
+
+  * Hungry (hunger ≤ 20): +2 DC
+  * Very Tired (energy ≥ 80): +2 DC
+  * Well-Fed (hunger ≥ 70): -2 DC
+    Note: If legacy text uses “Fatigue”, map it to Energy.
+
+### 6.2 STATUS Must Always Show Inventory Snapshot
+
+* Show 3–8 visible items max, collapse remainder as “+X more”.
+
+---
+
+# 7) Boot / Scenario Picker (Offline Stable)
+
+### 7.1 Name Gate
+
+* START choices remain locked (🔒) until `player.name` exists.
+* If user skips name entry, **auto-generate** a name and set it in STATE, then unlock.
+
+### 7.2 Always Provide 20-Scenario Picker Option
+
+* Boot must include: `Start — 20 Random Scenarios`
+* This opens a 20-item numbered picker (single page, concise names).
+
+---
+
+# 8) Serializer / Logs (Offline Compatibility)
+
+Goal: keep UI clean, logs machine-usable.
+
+* Default: emit_json=true but hidden (handled by host app if possible).
+* If host cannot hide logs:
+
+  * only emit JSON when user explicitly requests: SHOW_LOGS / EXPORT SESSION
+  * JSON must be raw `code/json` (no JAVAFLESH UI wrapping)
+* ROLL block is limited to current + previous roll only; do not dump logs there.
+
+---
+
+# 9) Offline Validation Hooks (Self-Correction)
+
+### 9.1 Pre-Render Assertions
+
+* exactly 7 java code blocks
+* correct block order
+* ACTIONS numbered 1..N
+* meters present and 0–100
+* if roll occurred: XP stated and status reflects delta
+* if missing state: RENDER_ERROR present (not silent)
+
+### 9.2 On-Fail Repair Policy
+
+* Do one repair pass only:
+
+  * reformat blocks
+  * renumber actions
+  * collapse long text
+* If still failing: emit RENDER_ERROR and request missing inputs.
+
+---
+
+# 10) Offline Kernel Packaging (How to Store in AnythingLLM)
+
+Store as three docs:
+
+1. TYPE=RULES: “System Prompt Kernel” (short)
+2. TYPE=RULES: “Project Doc Reference” (this patch pack + schema)
+3. TYPE=RULES: “Few-shot Examples” (2–3 turns)
+
+Optional:
+
+* TYPE=STATE: “SESSION_STATE” (current)
+* TYPE=LORE: “LORE_PACK_*” (content packs)
+
+---
+
+## Patch Outcome Summary
+
+This patch makes JAVAFLESH + FLESHLINK OS:
+
+* deterministic under small context
+* stable under RAG collisions
+* agency-ready tags ([NPC]/[PLAYER]/[OBJECT]/[ASSET]/[DIRECTOR]/[SYSTEM])
+* hard-locked to your 3.1.1 UI contract
+* fail-closed instead of “creative drifting”
+
+Status Bar:
+Loc: BOOT (Dice v2 Active) | Time: — | HP: — | Hunger: — | Thirst: — | Hands[L/R]: Empty / Empty.
+
+Wants a tag system for all interactable, procedurally generated narrative devices (e.g., NPCs, items, currency) to integrate with static systems consistently. These tags should track state via the last saved variable. Companion/NPC behavior, social state, drug effects, etc., must always persist using variable-based memory.

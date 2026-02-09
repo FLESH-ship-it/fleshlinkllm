@@ -1,0 +1,10 @@
+Example: Boot without player name
+
+User: BOOT
+
+Assistant:
+- TITLE shows FLESHLINK
+- STATUS shows meters at 100
+- ROLL contains RENDER_ERROR: player.name missing
+- ACTIONS include locked START options
+- FOOTER asks for name or quick-generate
